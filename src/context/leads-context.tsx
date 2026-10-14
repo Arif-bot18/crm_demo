@@ -1,20 +1,41 @@
 "use client";
 
 import * as React from "react";
-import { Lead, LeadActivity } from "@/types/crm";
+import {
+  Lead,
+  LeadActivity,
+  FollowUpTask,
+  FollowUpMethod,
+  FollowUpTaskStatus,
+} from "@/types/crm";
 import {
   INITIAL_DEMO_LEADS,
+  INITIAL_DEMO_FOLLOW_UPS,
   getSourceBadgeVariant,
   getStageBadgeVariant,
   normalizePhoneNumber,
   formatIndianPhoneNumber,
 } from "@/lib/demo-data";
+import {
+  isToday,
+  isOverdue,
+  isUpcoming,
+  formatFollowUpDate,
+  parseDate,
+} from "@/lib/date-utils";
 
 export interface PipelineSummaryMetrics {
   totalActive: number;
   inCounselling: number;
   feesDiscussed: number;
   enrolled: number;
+}
+
+export interface FollowUpSummaryMetrics {
+  today: number;
+  overdue: number;
+  upcoming: number;
+  completed: number;
 }
 
 interface LeadsContextType {
@@ -42,6 +63,28 @@ interface LeadsContextType {
     enrolledStudents: number;
   };
   pipelineSummary: PipelineSummaryMetrics;
+
+  // Follow-ups & Reminders state & actions
+  followUpTasks: FollowUpTask[];
+  addFollowUpTask: (
+    taskData: Omit<FollowUpTask, "id" | "createdAt" | "status">
+  ) => { success: boolean; error?: string };
+  rescheduleFollowUpTask: (
+    id: string,
+    newScheduledAt: string,
+    method?: FollowUpMethod,
+    notes?: string
+  ) => { success: boolean; error?: string };
+  completeFollowUpTask: (
+    id: string,
+    completionNotes?: string
+  ) => { success: boolean; error?: string };
+  cancelFollowUpTask: (
+    id: string,
+    cancelReason?: string
+  ) => { success: boolean; error?: string };
+  followUpSummary: FollowUpSummaryMetrics;
+
   resetToInitial: () => void;
 }
 
@@ -50,6 +93,9 @@ const LeadsContext = React.createContext<LeadsContextType | undefined>(undefined
 export function LeadsProvider({ children }: { children: React.ReactNode }) {
   // In-memory state for demonstration leads. Clearly non-persistent across hard reloads.
   const [leads, setLeads] = React.useState<Lead[]>(INITIAL_DEMO_LEADS);
+  const [followUpTasks, setFollowUpTasks] = React.useState<FollowUpTask[]>(
+    INITIAL_DEMO_FOLLOW_UPS
+  );
 
   const isPhoneDuplicate = React.useCallback(
     (phone: string, excludeId?: string) => {
@@ -64,6 +110,51 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
     [leads]
   );
 
+  /**
+   * Re-synchronizes a lead's nextFollowUp and isOverdue based on earliest pending task
+   */
+  const syncLeadNextFollowUp = React.useCallback(
+    (leadId: string, currentTasks: FollowUpTask[]) => {
+      // Find all pending tasks for this lead
+      const pendingTasks = currentTasks.filter(
+        (t) => t.leadId === leadId && t.status === "Pending"
+      );
+
+      setLeads((prevLeads) =>
+        prevLeads.map((lead) => {
+          if (lead.id !== leadId) return lead;
+
+          if (pendingTasks.length === 0) {
+            return {
+              ...lead,
+              nextFollowUp: "No Follow-up Scheduled",
+              nextFollowUpAt: undefined,
+              isOverdue: false,
+            };
+          }
+
+          // Sort ascending by scheduled timestamp to find the earliest
+          const sorted = [...pendingTasks].sort((a, b) => {
+            const timeA = new Date(a.scheduledAt).getTime();
+            const timeB = new Date(b.scheduledAt).getTime();
+            return timeA - timeB;
+          });
+
+          const earliest = sorted[0];
+          const overdue = isOverdue(earliest.scheduledAt);
+
+          return {
+            ...lead,
+            nextFollowUp: formatFollowUpDate(earliest.scheduledAt),
+            nextFollowUpAt: earliest.scheduledAt,
+            isOverdue: overdue,
+          };
+        })
+      );
+    },
+    []
+  );
+
   const addLead = React.useCallback(
     (
       newLeadData: Omit<
@@ -71,7 +162,6 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
         "id" | "createdAt" | "sourceBadgeVariant" | "stageBadgeVariant"
       >
     ) => {
-      // Check phone uniqueness
       if (isPhoneDuplicate(newLeadData.phone)) {
         return {
           success: false,
@@ -79,7 +169,6 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
-      // Generate next readable ID, e.g. LEAD-108
       const maxIdNum = leads.reduce((max, l) => {
         const num = parseInt(l.id.replace("LEAD-", ""), 10);
         return isNaN(num) ? max : Math.max(max, num);
@@ -124,7 +213,6 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
 
   const updateLead = React.useCallback(
     (id: string, updatedFields: Partial<Lead>) => {
-      // Check phone uniqueness if phone is updated
       if (updatedFields.phone && isPhoneDuplicate(updatedFields.phone, id)) {
         return {
           success: false,
@@ -187,14 +275,170 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
 
   const deleteLead = React.useCallback((id: string) => {
     setLeads((prev) => prev.filter((lead) => lead.id !== id));
+    // Also remove associated follow-up tasks
+    setFollowUpTasks((prev) => prev.filter((t) => t.leadId !== id));
     return { success: true };
   }, []);
 
+  // --- Follow-up Actions ---
+
+  const addFollowUpTask = React.useCallback(
+    (taskData: Omit<FollowUpTask, "id" | "createdAt" | "status">) => {
+      const maxIdNum = followUpTasks.reduce((max, t) => {
+        const num = parseInt(t.id.replace("TASK-", ""), 10);
+        return isNaN(num) ? max : Math.max(max, num);
+      }, 200);
+
+      const nextId = `TASK-${maxIdNum + 1}`;
+      const now = new Date();
+
+      const newTask: FollowUpTask = {
+        ...taskData,
+        id: nextId,
+        status: "Pending",
+        createdAt: now.toISOString(),
+      };
+
+      const updatedTasks = [newTask, ...followUpTasks];
+      setFollowUpTasks(updatedTasks);
+
+      // Re-sync earliest next follow-up for this lead
+      syncLeadNextFollowUp(taskData.leadId, updatedTasks);
+
+      return { success: true };
+    },
+    [followUpTasks, syncLeadNextFollowUp]
+  );
+
+  const rescheduleFollowUpTask = React.useCallback(
+    (
+      id: string,
+      newScheduledAt: string,
+      method?: FollowUpMethod,
+      notes?: string
+    ) => {
+      let targetLeadId: string | null = null;
+
+      const updatedTasks = followUpTasks.map((task) => {
+        if (task.id !== id) return task;
+        targetLeadId = task.leadId;
+
+        return {
+          ...task,
+          scheduledAt: newScheduledAt,
+          method: method || task.method,
+          notes: notes !== undefined ? notes : task.notes,
+          status: "Pending" as FollowUpTaskStatus,
+        };
+      });
+
+      setFollowUpTasks(updatedTasks);
+
+      if (targetLeadId) {
+        syncLeadNextFollowUp(targetLeadId, updatedTasks);
+      }
+
+      return { success: true };
+    },
+    [followUpTasks, syncLeadNextFollowUp]
+  );
+
+  const completeFollowUpTask = React.useCallback(
+    (id: string, completionNotes?: string) => {
+      let targetLeadId: string | null = null;
+      let targetTask: FollowUpTask | null = null;
+      const now = new Date();
+
+      const updatedTasks = followUpTasks.map((task) => {
+        if (task.id !== id) return task;
+        targetLeadId = task.leadId;
+        targetTask = task;
+
+        return {
+          ...task,
+          status: "Completed" as FollowUpTaskStatus,
+          completedAt: now.toISOString(),
+          completionNotes: completionNotes || task.notes,
+        };
+      });
+
+      setFollowUpTasks(updatedTasks);
+
+      // Add activity entry to the lead record
+      if (targetLeadId && targetTask) {
+        const taskObj = targetTask as FollowUpTask;
+        const formattedTimestamp = now.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "numeric",
+          minute: "numeric",
+          hour12: true,
+        });
+
+        setLeads((prevLeads) =>
+          prevLeads.map((lead) => {
+            if (lead.id !== targetLeadId) return lead;
+            const newActivities = [...(lead.activities || [])];
+            newActivities.push({
+              id: `ACT-${Date.now()}`,
+              type: "call",
+              description: `Follow-up completed via ${taskObj.method}`,
+              counselor: taskObj.assignedCounsellor,
+              timestamp: formattedTimestamp,
+              note: completionNotes || taskObj.notes,
+            });
+            return {
+              ...lead,
+              activities: newActivities,
+              lastContactedAt: formattedTimestamp,
+            };
+          })
+        );
+
+        // Re-sync remaining pending follow-ups for this lead
+        syncLeadNextFollowUp(targetLeadId, updatedTasks);
+      }
+
+      return { success: true };
+    },
+    [followUpTasks, syncLeadNextFollowUp]
+  );
+
+  const cancelFollowUpTask = React.useCallback(
+    (id: string, cancelReason?: string) => {
+      let targetLeadId: string | null = null;
+
+      const updatedTasks = followUpTasks.map((task) => {
+        if (task.id !== id) return task;
+        targetLeadId = task.leadId;
+
+        return {
+          ...task,
+          status: "Cancelled" as FollowUpTaskStatus,
+          notes: cancelReason
+            ? `${task.notes ? task.notes + " | " : ""}Cancellation: ${cancelReason}`
+            : task.notes,
+        };
+      });
+
+      setFollowUpTasks(updatedTasks);
+
+      if (targetLeadId) {
+        syncLeadNextFollowUp(targetLeadId, updatedTasks);
+      }
+
+      return { success: true };
+    },
+    [followUpTasks, syncLeadNextFollowUp]
+  );
+
   const resetToInitial = React.useCallback(() => {
     setLeads(INITIAL_DEMO_LEADS);
+    setFollowUpTasks(INITIAL_DEMO_FOLLOW_UPS);
   }, []);
 
-  // Calculate dynamic metrics from loaded demonstration dataset for All Leads
+  // Summary counts for All Leads
   const summary = React.useMemo(() => {
     const totalLeads = leads.length;
     const newLeads = leads.filter((l) => l.stage === "New Lead").length;
@@ -214,7 +458,7 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
     };
   }, [leads]);
 
-  // Calculate pipeline-specific summary metrics
+  // Summary counts for Pipeline
   const pipelineSummary = React.useMemo<PipelineSummaryMetrics>(() => {
     const totalActive = leads.filter((l) => l.stage !== "Lost").length;
     const inCounselling = leads.filter((l) => l.stage === "Counselling").length;
@@ -229,6 +473,23 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
     };
   }, [leads]);
 
+  // Follow-up Summary counts (strictly derived from followUpTasks and local timestamps)
+  const followUpSummary = React.useMemo<FollowUpSummaryMetrics>(() => {
+    const pendingTasks = followUpTasks.filter((t) => t.status === "Pending");
+    const completedTasks = followUpTasks.filter((t) => t.status === "Completed");
+
+    const todayCount = pendingTasks.filter((t) => isToday(t.scheduledAt)).length;
+    const overdueCount = pendingTasks.filter((t) => isOverdue(t.scheduledAt)).length;
+    const upcomingCount = pendingTasks.filter((t) => isUpcoming(t.scheduledAt)).length;
+
+    return {
+      today: todayCount,
+      overdue: overdueCount,
+      upcoming: upcomingCount,
+      completed: completedTasks.length,
+    };
+  }, [followUpTasks]);
+
   return (
     <LeadsContext.Provider
       value={{
@@ -240,6 +501,14 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
         isPhoneDuplicate,
         summary,
         pipelineSummary,
+
+        followUpTasks,
+        addFollowUpTask,
+        rescheduleFollowUpTask,
+        completeFollowUpTask,
+        cancelFollowUpTask,
+        followUpSummary,
+
         resetToInitial,
       }}
     >

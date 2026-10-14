@@ -18,6 +18,7 @@ import {
   Headphones,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLeads } from "@/context/leads-context";
 
 export interface NavItem {
   title: string;
@@ -86,6 +87,8 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const { followUpSummary } = useLeads();
+  const dueCount = followUpSummary.overdue + followUpSummary.today;
 
   return (
     <>
@@ -178,7 +181,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                           : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
                       )}
                     >
-                      {item.badge}
+                      {item.href === "/follow-ups" ? `${dueCount} Due` : item.badge}
                     </span>
                   )}
                 </Link>

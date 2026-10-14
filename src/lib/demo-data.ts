@@ -6,7 +6,7 @@
  * Do not treat these records as live customer data.
  */
 
-import { Lead, LeadActivity } from "@/types/crm";
+import { Lead, LeadActivity, FollowUpTask, FollowUpMethod, FollowUpTaskStatus } from "@/types/crm";
 
 export interface DashboardSummaryData {
   totalLeads: number;
@@ -412,3 +412,110 @@ export const INITIAL_DEMO_LEADS: Lead[] = [
 ];
 
 export const DEMO_RECENT_LEADS: Lead[] = INITIAL_DEMO_LEADS;
+
+export const FOLLOW_UP_METHODS: FollowUpMethod[] = [
+  "Phone Call",
+  "WhatsApp",
+  "Email",
+  "Other",
+];
+
+export const FOLLOW_UP_STATUSES: FollowUpTaskStatus[] = [
+  "Pending",
+  "Completed",
+  "Cancelled",
+];
+
+// Helper to generate dynamic ISO timestamps relative to current day
+function getRelativeDate(dayOffset: number, hours: number, minutes: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + dayOffset);
+  d.setHours(hours, minutes, 0, 0);
+  return d.toISOString();
+}
+
+export const INITIAL_DEMO_FOLLOW_UPS: FollowUpTask[] = [
+  {
+    id: "TASK-201",
+    leadId: "LEAD-101",
+    scheduledAt: getRelativeDate(0, 14, 30), // Today 2:30 PM (Pending / Overdue if past 2:30 PM)
+    method: "Phone Call",
+    notes: "Call to discuss weekend batch timings and AAPC exam voucher inclusion.",
+    assignedCounsellor: "Priya Sharma",
+    status: "Pending",
+    createdAt: getRelativeDate(-1, 10, 0),
+  },
+  {
+    id: "TASK-202",
+    leadId: "LEAD-102",
+    scheduledAt: getRelativeDate(0, 16, 30), // Today 4:30 PM (Due Today)
+    method: "WhatsApp",
+    notes: "Send syllabus PDF and counseling slot reservation link.",
+    assignedCounsellor: "Priya Sharma",
+    status: "Pending",
+    createdAt: getRelativeDate(0, 9, 30),
+  },
+  {
+    id: "TASK-203",
+    leadId: "LEAD-105",
+    scheduledAt: getRelativeDate(-1, 17, 0), // Yesterday 5:00 PM (Explicitly Overdue)
+    method: "Phone Call",
+    notes: "Urgent callback needed. Call dropped during fee discussion yesterday.",
+    assignedCounsellor: "Amit Patel",
+    status: "Pending",
+    createdAt: getRelativeDate(-2, 17, 0),
+  },
+  {
+    id: "TASK-204",
+    leadId: "LEAD-103",
+    scheduledAt: getRelativeDate(1, 11, 0), // Tomorrow 11:00 AM (Upcoming)
+    method: "Phone Call",
+    notes: "In-person campus visit reminder. Candidate attending with parent.",
+    assignedCounsellor: "Amit Patel",
+    status: "Pending",
+    createdAt: getRelativeDate(-1, 14, 0),
+  },
+  {
+    id: "TASK-205",
+    leadId: "LEAD-106",
+    scheduledAt: getRelativeDate(2, 10, 30), // In 2 days 10:30 AM (Upcoming)
+    method: "WhatsApp",
+    notes: "Confirm receipt of installment payment QR link.",
+    assignedCounsellor: "Priya Sharma",
+    status: "Pending",
+    createdAt: getRelativeDate(-1, 12, 0),
+  },
+  {
+    id: "TASK-206",
+    leadId: "LEAD-107",
+    scheduledAt: getRelativeDate(2, 14, 0), // In 2 days 2:00 PM (Upcoming)
+    method: "Phone Call",
+    notes: "Review hospital shift timings to finalize batch schedule.",
+    assignedCounsellor: "Dr. Sarah Chen",
+    status: "Pending",
+    createdAt: getRelativeDate(-1, 15, 30),
+  },
+  {
+    id: "TASK-207",
+    leadId: "LEAD-104",
+    scheduledAt: getRelativeDate(-1, 14, 0), // Yesterday (Completed)
+    method: "Phone Call",
+    notes: "Follow up on fee token deposit.",
+    assignedCounsellor: "Dr. Sarah Chen",
+    status: "Completed",
+    completedAt: getRelativeDate(-1, 14, 15),
+    completionNotes: "Fee token received via UPI. Enrollment confirmed for Nov batch.",
+    createdAt: getRelativeDate(-3, 11, 0),
+  },
+  {
+    id: "TASK-208",
+    leadId: "LEAD-101",
+    scheduledAt: getRelativeDate(-2, 10, 0), // 2 days ago (Cancelled)
+    method: "Email",
+    notes: "Candidate requested communication via phone instead of email.",
+    assignedCounsellor: "Priya Sharma",
+    status: "Cancelled",
+    createdAt: getRelativeDate(-3, 9, 0),
+  },
+];
+

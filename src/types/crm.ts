@@ -31,6 +31,15 @@ export type PipelineStage =
   | "enrolled"
   | "lost";
 
+export type PipelineStageName =
+  | "New Lead"
+  | "Contacted"
+  | "Interested"
+  | "Counselling"
+  | "Fees Discussed"
+  | "Enrolled"
+  | "Lost";
+
 export interface PipelineStageConfig {
   id: PipelineStage;
   label: string;
@@ -93,6 +102,22 @@ export interface Lead {
 }
 
 export type LeadRecord = Lead;
+
+export type FollowUpMethod = "Phone Call" | "WhatsApp" | "Email" | "Other";
+export type FollowUpTaskStatus = "Pending" | "Completed" | "Cancelled";
+
+export interface FollowUpTask {
+  id: string;
+  leadId: string;
+  scheduledAt: string; // ISO 8601 string, e.g. "2026-10-14T14:30:00"
+  method: FollowUpMethod;
+  notes?: string;
+  assignedCounsellor: string;
+  status: FollowUpTaskStatus;
+  completedAt?: string;
+  completionNotes?: string;
+  createdAt: string;
+}
 
 export type FollowUpType = "call" | "whatsapp" | "campus_visit" | "email" | "online_meeting";
 export type FollowUpStatus = "scheduled" | "completed" | "missed" | "rescheduled" | "cancelled";
