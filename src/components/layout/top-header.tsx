@@ -1,14 +1,13 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import {
   Menu,
   Search,
   Bell,
   Plus,
-  CheckCircle2,
   ChevronDown,
-  User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -52,16 +51,15 @@ export function TopHeader({ onToggleSidebar }: TopHeaderProps) {
       {/* Right: Quick Actions, Notifications, Counselor Profile */}
       <div className="flex items-center gap-3">
         {/* Quick Add Lead Button */}
-        <Button
-          size="sm"
-          className="hidden sm:inline-flex bg-primary hover:bg-primary-hover text-white shadow-subtle text-xs"
-          onClick={() => {
-            alert("New Lead creation modal will be implemented in the Leads module.");
-          }}
-        >
-          <Plus className="h-3.5 w-3.5 mr-1" />
-          Add Lead
-        </Button>
+        <Link href="/leads">
+          <Button
+            size="sm"
+            className="hidden sm:inline-flex bg-primary hover:bg-primary-hover text-white shadow-subtle text-xs"
+          >
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            Add Lead
+          </Button>
+        </Link>
 
         {/* Notification Bell */}
         <div className="relative">

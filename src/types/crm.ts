@@ -49,28 +49,50 @@ export interface Counselor {
   role: "counselor" | "senior_counselor" | "admission_head" | "admin";
 }
 
+export interface LeadActivity {
+  id: string;
+  type: "created" | "stage_change" | "call" | "whatsapp" | "note";
+  description: string;
+  counselor: string;
+  timestamp: string;
+  note?: string;
+}
+
 export interface Lead {
   id: string;
-  name: string;
+  studentName: string;
+  name?: string; // alias for studentName
   email: string;
   phone: string;
   alternatePhone?: string;
   city?: string;
   educationBackground?: string; // e.g. B.Pharm, Life Sciences, B.Sc Nursing, General Graduate
-  targetCourseId?: string; // e.g. CPC Prep, Comprehensive Medical Coding
+  course: string;
+  targetCourseId?: string;
   courseName?: string;
-  source: LeadSource;
+  source: string;
+  sourceBadgeVariant?: "default" | "success" | "warning" | "error" | "info" | "neutral";
+  campaignName?: string;
   sourceCampaign?: string;
-  stage: PipelineStage;
-  priority: LeadPriority;
+  stage: string;
+  stageBadgeVariant?: "default" | "success" | "warning" | "error" | "info" | "neutral";
+  priority?: LeadPriority;
+  counselor: string;
   assignedCounselor?: Counselor;
   estimatedFee?: number;
+  nextFollowUp: string;
   nextFollowUpAt?: string;
+  isOverdue?: boolean;
   tags?: string[];
+  notes?: string;
   notesCount?: number;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
+  lastContactedAt?: string;
+  activities?: LeadActivity[];
 }
+
+export type LeadRecord = Lead;
 
 export type FollowUpType = "call" | "whatsapp" | "campus_visit" | "email" | "online_meeting";
 export type FollowUpStatus = "scheduled" | "completed" | "missed" | "rescheduled" | "cancelled";

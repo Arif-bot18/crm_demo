@@ -8,15 +8,16 @@ import { LeadSourceChart } from "@/components/dashboard/lead-source-chart";
 import { PipelineBarChart } from "@/components/dashboard/pipeline-bar-chart";
 import { RecentLeadsTable } from "@/components/dashboard/recent-leads-table";
 import { QuickInsight } from "@/components/dashboard/quick-insight";
+import { useLeads } from "@/context/leads-context";
 import {
   DateRangeOption,
   DEMO_SUMMARY_DATA,
   DEMO_LEAD_SOURCES,
   DEMO_PIPELINE_STAGES,
-  DEMO_RECENT_LEADS,
 } from "@/lib/demo-data";
 
 export default function DashboardPage() {
+  const { leads } = useLeads();
   const [selectedRange, setSelectedRange] = React.useState<DateRangeOption>("This month");
 
   const currentSummary = DEMO_SUMMARY_DATA[selectedRange] || DEMO_SUMMARY_DATA["This month"];
@@ -38,8 +39,8 @@ export default function DashboardPage() {
         <PipelineBarChart stages={DEMO_PIPELINE_STAGES} />
       </div>
 
-      {/* 4. Full-Width Recent Leads Table */}
-      <RecentLeadsTable leads={DEMO_RECENT_LEADS} />
+      {/* 4. Full-Width Recent Leads Table from Shared State */}
+      <RecentLeadsTable leads={leads.slice(0, 7)} />
 
       {/* 5. Compact Quick Insight Panel */}
       <QuickInsight />
