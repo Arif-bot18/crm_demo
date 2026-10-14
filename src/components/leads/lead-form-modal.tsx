@@ -29,6 +29,7 @@ interface FormState {
   email: string;
   course: string;
   source: string;
+  campaignId?: string;
   campaignName: string;
   stage: string;
   counselor: string;
@@ -53,7 +54,7 @@ export function LeadFormModal({
   leadToEdit,
   onSuccess,
 }: LeadFormModalProps) {
-  const { addLead, updateLead, isPhoneDuplicate } = useLeads();
+  const { addLead, updateLead, isPhoneDuplicate, sources, campaigns } = useLeads();
 
   const isEditing = Boolean(leadToEdit);
 
@@ -62,7 +63,8 @@ export function LeadFormModal({
     phone: "",
     email: "",
     course: COURSE_OPTIONS[0],
-    source: SOURCE_OPTIONS[0],
+    source: sources[0]?.name || SOURCE_OPTIONS[0],
+    campaignId: undefined,
     campaignName: "",
     stage: PIPELINE_STAGES[0],
     counselor: COUNSELOR_OPTIONS[0],
@@ -73,6 +75,7 @@ export function LeadFormModal({
   const [form, setForm] = React.useState<FormState>(initialFormState);
   const [errors, setErrors] = React.useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [useCustomCampaign, setUseCustomCampaign] = React.useState(false);
 
   // Populate form if editing
   React.useEffect(() => {
@@ -82,19 +85,51 @@ export function LeadFormModal({
         phone: leadToEdit.phone,
         email: leadToEdit.email || "",
         course: leadToEdit.course || COURSE_OPTIONS[0],
-        source: leadToEdit.source || SOURCE_OPTIONS[0],
+        source: leadToEdit.source || sources[0]?.name || SOURCE_OPTIONS[0],
+        campaignId: leadToEdit.campaignId,
         campaignName: leadToEdit.campaignName || "",
         stage: leadToEdit.stage || PIPELINE_STAGES[0],
         counselor: leadToEdit.counselor || COUNSELOR_OPTIONS[0],
         nextFollowUp: leadToEdit.nextFollowUp || "Tomorrow, 10:00 AM",
         notes: leadToEdit.notes || "",
       });
+      setUseCustomCampaign(Boolean(leadToEdit.campaignName && !leadToEdit.campaignId));
       setErrors({});
     } else {
-      setForm(initialFormState);
+      setForm({
+        ...initialFormState,
+        source: sources[0]?.name || SOURCE_OPTIONS[0],
+      });
+      setUseCustomCampaign(false);
       setErrors({});
     }
-  }, [leadToEdit, isOpen]);
+  }, [leadToEdit, isOpen, sources]);
+
+  const availableSources = React.useMemo(() => {
+    if (sources && sources.length > 0) {
+      return sources.filter((s) => s.isActive || s.name === form.source);
+    }
+    return SOURCE_OPTIONS.map((name) => ({
+      id: name,
+      name,
+      isActive: true,
+    }));
+  }, [sources, form.source]);
+
+  const currentSource = React.useMemo(() => {
+    return sources.find(
+      (s) => s.name.toLowerCase() === form.source.toLowerCase()
+    );
+  }, [sources, form.source]);
+
+  const campaignsForSource = React.useMemo(() => {
+    if (!currentSource) return [];
+    return campaigns.filter(
+      (c) =>
+        c.sourceId === currentSource.id ||
+        c.sourceName.toLowerCase() === form.source.toLowerCase()
+    );
+  }, [campaigns, currentSource, form.source]);
 
   if (!isOpen) return null;
 
@@ -167,6 +202,7 @@ export function LeadFormModal({
           email: form.email.trim(),
           course: form.course,
           source: form.source,
+          campaignId: form.campaignId || undefined,
           campaignName: form.campaignName.trim() || undefined,
           stage: form.stage,
           counselor: form.counselor,
@@ -189,6 +225,7 @@ export function LeadFormModal({
           email: form.email.trim(),
           course: form.course,
           source: form.source,
+          campaignId: form.campaignId || undefined,
           campaignName: form.campaignName.trim() || undefined,
           stage: form.stage,
           counselor: form.counselor,
@@ -330,12 +367,26 @@ export function LeadFormModal({
               </label>
               <Select
                 value={form.source}
-                onChange={(e) => setForm({ ...form, source: e.target.value })}
+                onChange={(e) => {
+                  const newSource = e.target.value;
+                  const matchingCamp = campaigns.find(
+                    (c) =>
+                      (c.id === form.campaignId || c.name === form.campaignName) &&
+                      c.sourceName.toLowerCase() === newSource.toLowerCase()
+                  );
+                  setForm({
+                    ...form,
+                    source: newSource,
+                    campaignId: matchingCamp ? matchingCamp.id : undefined,
+                    campaignName: matchingCamp ? matchingCamp.name : "",
+                  });
+                  setUseCustomCampaign(false);
+                }}
                 error={Boolean(errors.source)}
               >
-                {SOURCE_OPTIONS.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
+                {availableSources.map((s) => (
+                  <option key={s.id} value={s.name}>
+                    {s.name} {!s.isActive ? "(Inactive)" : ""}
                   </option>
                 ))}
               </Select>
@@ -348,13 +399,60 @@ export function LeadFormModal({
               <label className="text-xs font-semibold text-text-primary">
                 Campaign / Referral Tag
               </label>
-              <Input
-                value={form.campaignName}
-                onChange={(e) =>
-                  setForm({ ...form, campaignName: e.target.value })
-                }
-                placeholder="e.g. Justdial_Direct or IG_Ad_CPC"
-              />
+              {campaignsForSource.length > 0 && !useCustomCampaign ? (
+                <div className="space-y-1">
+                  <Select
+                    value={form.campaignId || ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === "__custom__") {
+                        setUseCustomCampaign(true);
+                        setForm({ ...form, campaignId: undefined });
+                      } else if (!val) {
+                        setForm({ ...form, campaignId: undefined, campaignName: "" });
+                      } else {
+                        const found = campaignsForSource.find((c) => c.id === val);
+                        setForm({
+                          ...form,
+                          campaignId: val,
+                          campaignName: found ? found.name : "",
+                        });
+                      }
+                    }}
+                  >
+                    <option value="">(None / Direct Inquiry)</option>
+                    {campaignsForSource.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.status})
+                      </option>
+                    ))}
+                    <option value="__custom__">+ Enter custom campaign tag...</option>
+                  </Select>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <Input
+                    value={form.campaignName}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        campaignName: e.target.value,
+                        campaignId: undefined,
+                      })
+                    }
+                    placeholder="e.g. Justdial_Direct or IG_Ad_CPC"
+                  />
+                  {campaignsForSource.length > 0 && useCustomCampaign && (
+                    <button
+                      type="button"
+                      onClick={() => setUseCustomCampaign(false)}
+                      className="text-[11px] text-primary hover:underline"
+                    >
+                      ← Select from managed campaigns
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

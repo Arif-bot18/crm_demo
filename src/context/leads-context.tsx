@@ -7,10 +7,17 @@ import {
   FollowUpTask,
   FollowUpMethod,
   FollowUpTaskStatus,
+  ManagedLeadSource,
+  MarketingCampaign,
+  SourcePerformanceMetric,
+  CampaignPerformanceMetric,
+  SourcesSummaryMetrics,
 } from "@/types/crm";
 import {
   INITIAL_DEMO_LEADS,
   INITIAL_DEMO_FOLLOW_UPS,
+  INITIAL_DEMO_SOURCES,
+  INITIAL_DEMO_CAMPAIGNS,
   getSourceBadgeVariant,
   getStageBadgeVariant,
   normalizePhoneNumber,
@@ -85,6 +92,29 @@ interface LeadsContextType {
   ) => { success: boolean; error?: string };
   followUpSummary: FollowUpSummaryMetrics;
 
+  // Sources & Campaigns state & actions
+  sources: ManagedLeadSource[];
+  campaigns: MarketingCampaign[];
+  addSource: (
+    sourceData: Omit<ManagedLeadSource, "id" | "createdAt">
+  ) => { success: boolean; error?: string };
+  updateSource: (
+    id: string,
+    updatedFields: Partial<ManagedLeadSource>
+  ) => { success: boolean; error?: string };
+  toggleSourceActive: (id: string) => { success: boolean; error?: string };
+  addCampaign: (
+    campaignData: Omit<MarketingCampaign, "id" | "createdAt">
+  ) => { success: boolean; error?: string };
+  updateCampaign: (
+    id: string,
+    updatedFields: Partial<MarketingCampaign>
+  ) => { success: boolean; error?: string };
+  deleteCampaign: (id: string) => { success: boolean; error?: string };
+  sourceMetrics: SourcePerformanceMetric[];
+  campaignMetrics: CampaignPerformanceMetric[];
+  sourcesSummary: SourcesSummaryMetrics;
+
   resetToInitial: () => void;
 }
 
@@ -95,6 +125,12 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
   const [leads, setLeads] = React.useState<Lead[]>(INITIAL_DEMO_LEADS);
   const [followUpTasks, setFollowUpTasks] = React.useState<FollowUpTask[]>(
     INITIAL_DEMO_FOLLOW_UPS
+  );
+  const [sources, setSources] = React.useState<ManagedLeadSource[]>(
+    INITIAL_DEMO_SOURCES
+  );
+  const [campaigns, setCampaigns] = React.useState<MarketingCampaign[]>(
+    INITIAL_DEMO_CAMPAIGNS
   );
 
   const isPhoneDuplicate = React.useCallback(
@@ -433,10 +469,313 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
     [followUpTasks, syncLeadNextFollowUp]
   );
 
+  // --- Sources & Campaigns Actions ---
+
+  const addSource = React.useCallback(
+    (sourceData: Omit<ManagedLeadSource, "id" | "createdAt">) => {
+      const trimmedName = sourceData.name.trim();
+      if (!trimmedName) {
+        return { success: false, error: "Source name is required." };
+      }
+      if (
+        sources.some(
+          (s) => s.name.toLowerCase() === trimmedName.toLowerCase()
+        )
+      ) {
+        return {
+          success: false,
+          error: "A source with this name already exists in the system.",
+        };
+      }
+
+      const idSlug = trimmedName.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10);
+      const id = `SRC-${idSlug || Date.now()}`;
+      const now = new Date();
+      const createdAt = now.toISOString().split("T")[0];
+
+      const newSource: ManagedLeadSource = {
+        ...sourceData,
+        id,
+        name: trimmedName,
+        createdAt,
+      };
+
+      setSources((prev) => [...prev, newSource]);
+      return { success: true };
+    },
+    [sources]
+  );
+
+  const updateSource = React.useCallback(
+    (id: string, updatedFields: Partial<ManagedLeadSource>) => {
+      let prevName = "";
+      const existing = sources.find((s) => s.id === id);
+      if (existing) {
+        prevName = existing.name;
+      }
+
+      if (updatedFields.name) {
+        const trimmedName = updatedFields.name.trim();
+        if (!trimmedName) {
+          return { success: false, error: "Source name cannot be empty." };
+        }
+        const duplicate = sources.some(
+          (s) =>
+            s.id !== id &&
+            s.name.toLowerCase() === trimmedName.toLowerCase()
+        );
+        if (duplicate) {
+          return {
+            success: false,
+            error: "Another source with this name already exists.",
+          };
+        }
+      }
+
+      setSources((prev) =>
+        prev.map((source) => {
+          if (source.id !== id) return source;
+          const updated = { ...source, ...updatedFields };
+          if (updatedFields.name) {
+            updated.name = updatedFields.name.trim();
+          }
+          return updated;
+        })
+      );
+
+      // If source name changed, update denormalized sourceName on campaigns and leads
+      if (updatedFields.name && prevName && updatedFields.name.trim() !== prevName) {
+        const newName = updatedFields.name.trim();
+        setCampaigns((prev) =>
+          prev.map((c) => (c.sourceId === id ? { ...c, sourceName: newName } : c))
+        );
+        setLeads((prev) =>
+          prev.map((l) =>
+            l.source.toLowerCase() === prevName.toLowerCase()
+              ? { ...l, source: newName, sourceBadgeVariant: getSourceBadgeVariant(newName) }
+              : l
+          )
+        );
+      }
+
+      return { success: true };
+    },
+    [sources]
+  );
+
+  const toggleSourceActive = React.useCallback((id: string) => {
+    setSources((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, isActive: !s.isActive } : s))
+    );
+    return { success: true };
+  }, []);
+
+  const addCampaign = React.useCallback(
+    (campaignData: Omit<MarketingCampaign, "id" | "createdAt">) => {
+      const trimmedName = campaignData.name.trim();
+      if (!trimmedName) {
+        return { success: false, error: "Campaign name is required." };
+      }
+      if (
+        campaigns.some(
+          (c) => c.name.toLowerCase() === trimmedName.toLowerCase()
+        )
+      ) {
+        return {
+          success: false,
+          error: "A campaign with this name already exists in the system.",
+        };
+      }
+
+      const maxNum = campaigns.reduce((max, c) => {
+        const num = parseInt(c.id.replace("CAMP-", ""), 10);
+        return isNaN(num) ? max : Math.max(max, num);
+      }, 100);
+
+      const nextId = `CAMP-${maxNum + 1}`;
+      const now = new Date();
+      const createdAt = now.toISOString().split("T")[0];
+
+      // Match source name from sources
+      const matchedSource = sources.find((s) => s.id === campaignData.sourceId);
+      const sourceName = matchedSource
+        ? matchedSource.name
+        : campaignData.sourceName || "Other";
+
+      const newCampaign: MarketingCampaign = {
+        ...campaignData,
+        id: nextId,
+        name: trimmedName,
+        sourceName,
+        budget: Math.max(0, Number(campaignData.budget) || 0),
+        createdAt,
+      };
+
+      setCampaigns((prev) => [newCampaign, ...prev]);
+      return { success: true };
+    },
+    [campaigns, sources]
+  );
+
+  const updateCampaign = React.useCallback(
+    (id: string, updatedFields: Partial<MarketingCampaign>) => {
+      if (updatedFields.name) {
+        const trimmedName = updatedFields.name.trim();
+        if (!trimmedName) {
+          return { success: false, error: "Campaign name cannot be empty." };
+        }
+        const duplicate = campaigns.some(
+          (c) =>
+            c.id !== id &&
+            c.name.toLowerCase() === trimmedName.toLowerCase()
+        );
+        if (duplicate) {
+          return {
+            success: false,
+            error: "Another campaign with this name already exists.",
+          };
+        }
+      }
+
+      setCampaigns((prev) =>
+        prev.map((c) => {
+          if (c.id !== id) return c;
+          let sourceName = c.sourceName;
+          if (updatedFields.sourceId && updatedFields.sourceId !== c.sourceId) {
+            const matched = sources.find((s) => s.id === updatedFields.sourceId);
+            if (matched) sourceName = matched.name;
+          }
+          return {
+            ...c,
+            ...updatedFields,
+            sourceName,
+            name: updatedFields.name ? updatedFields.name.trim() : c.name,
+            budget:
+              updatedFields.budget !== undefined
+                ? Math.max(0, Number(updatedFields.budget) || 0)
+                : c.budget,
+          };
+        })
+      );
+
+      return { success: true };
+    },
+    [campaigns, sources]
+  );
+
+  const deleteCampaign = React.useCallback((id: string) => {
+    setCampaigns((prev) => prev.filter((c) => c.id !== id));
+    return { success: true };
+  }, []);
+
   const resetToInitial = React.useCallback(() => {
     setLeads(INITIAL_DEMO_LEADS);
     setFollowUpTasks(INITIAL_DEMO_FOLLOW_UPS);
+    setSources(INITIAL_DEMO_SOURCES);
+    setCampaigns(INITIAL_DEMO_CAMPAIGNS);
   }, []);
+
+  // Channel-wise performance metrics computed dynamically from leads
+  const sourceMetrics = React.useMemo<SourcePerformanceMetric[]>(() => {
+    return sources.map((source) => {
+      const sNameLower = source.name.toLowerCase();
+      const matchedLeads = leads.filter(
+        (l) => l.source && l.source.toLowerCase() === sNameLower
+      );
+      const enrolledCount = matchedLeads.filter(
+        (l) => l.stage === "Enrolled"
+      ).length;
+      const conversionRate =
+        matchedLeads.length > 0
+          ? Math.round((enrolledCount / matchedLeads.length) * 1000) / 10
+          : 0;
+      const activeCampaignsCount = campaigns.filter(
+        (c) => c.sourceId === source.id && c.status === "Active"
+      ).length;
+
+      return {
+        sourceId: source.id,
+        sourceName: source.name,
+        category: source.category,
+        badgeVariant: source.badgeVariant,
+        isActive: source.isActive,
+        totalLeads: matchedLeads.length,
+        enrolledCount,
+        conversionRate,
+        activeCampaignsCount,
+      };
+    });
+  }, [sources, leads, campaigns]);
+
+  // Campaign performance metrics computed dynamically from leads
+  const campaignMetrics = React.useMemo<CampaignPerformanceMetric[]>(() => {
+    return campaigns.map((campaign) => {
+      const cNameLower = campaign.name.toLowerCase();
+      const matchedLeads = leads.filter((l) => {
+        if (l.campaignId && l.campaignId === campaign.id) return true;
+        if (l.campaignName && l.campaignName.toLowerCase() === cNameLower)
+          return true;
+        return false;
+      });
+
+      const enrolledCount = matchedLeads.filter(
+        (l) => l.stage === "Enrolled"
+      ).length;
+      const conversionRate =
+        matchedLeads.length > 0
+          ? Math.round((enrolledCount / matchedLeads.length) * 1000) / 10
+          : 0;
+      const costPerLead =
+        matchedLeads.length > 0
+          ? Math.round(campaign.budget / matchedLeads.length)
+          : null;
+
+      return {
+        campaignId: campaign.id,
+        campaignName: campaign.name,
+        sourceId: campaign.sourceId,
+        sourceName: campaign.sourceName,
+        startDate: campaign.startDate,
+        endDate: campaign.endDate,
+        budget: campaign.budget,
+        status: campaign.status,
+        totalLeads: matchedLeads.length,
+        enrolledCount,
+        conversionRate,
+        costPerLead,
+      };
+    });
+  }, [campaigns, leads]);
+
+  // High-level Sources & Campaigns summary metrics
+  const sourcesSummary = React.useMemo<SourcesSummaryMetrics>(() => {
+    const totalSources = sources.length;
+    const activeSources = sources.filter((s) => s.isActive).length;
+    const totalCampaigns = campaigns.length;
+    const activeCampaigns = campaigns.filter((c) => c.status === "Active").length;
+    const attributedLeads = leads.filter((l) => Boolean(l.source)).length;
+    const enrolledAdmissions = leads.filter(
+      (l) => l.stage === "Enrolled"
+    ).length;
+    const totalBudget = campaigns
+      .filter((c) => c.status === "Active")
+      .reduce((sum, c) => sum + (c.budget || 0), 0);
+    const avgConversionRate =
+      leads.length > 0
+        ? Math.round((enrolledAdmissions / leads.length) * 1000) / 10
+        : 0;
+
+    return {
+      totalSources,
+      activeSources,
+      totalCampaigns,
+      activeCampaigns,
+      attributedLeads,
+      enrolledAdmissions,
+      totalBudget,
+      avgConversionRate,
+    };
+  }, [sources, campaigns, leads]);
 
   // Summary counts for All Leads
   const summary = React.useMemo(() => {
@@ -508,6 +847,18 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
         completeFollowUpTask,
         cancelFollowUpTask,
         followUpSummary,
+
+        sources,
+        campaigns,
+        addSource,
+        updateSource,
+        toggleSourceActive,
+        addCampaign,
+        updateCampaign,
+        deleteCampaign,
+        sourceMetrics,
+        campaignMetrics,
+        sourcesSummary,
 
         resetToInitial,
       }}

@@ -9,6 +9,7 @@ import {
   PIPELINE_STAGES,
   COUNSELOR_OPTIONS,
 } from "@/lib/demo-data";
+import { useLeads } from "@/context/leads-context";
 
 export interface LeadsFilterState {
   searchQuery: string;
@@ -32,6 +33,15 @@ export function LeadsFilters({
   filteredCount,
   onReset,
 }: LeadsFiltersProps) {
+  const { sources } = useLeads();
+
+  const sourceList = React.useMemo(() => {
+    if (sources && sources.length > 0) {
+      return Array.from(new Set(sources.map((s) => s.name)));
+    }
+    return Array.from(SOURCE_OPTIONS);
+  }, [sources]);
+
   const isFiltered =
     Boolean(filters.searchQuery.trim()) ||
     Boolean(filters.source) ||
@@ -76,7 +86,7 @@ export function LeadsFilters({
               aria-label="Filter by Lead Source"
             >
               <option value="">All Sources</option>
-              {SOURCE_OPTIONS.map((src) => (
+              {sourceList.map((src) => (
                 <option key={src} value={src}>
                   {src}
                 </option>

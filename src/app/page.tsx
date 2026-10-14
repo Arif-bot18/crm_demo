@@ -22,6 +22,23 @@ export default function DashboardPage() {
 
   const currentSummary = DEMO_SUMMARY_DATA[selectedRange] || DEMO_SUMMARY_DATA["This month"];
 
+  // Dynamically calculate lead sources from shared leads state
+  const dynamicLeadSources = React.useMemo(() => {
+    return DEMO_LEAD_SOURCES.map((sourceItem) => {
+      const count = leads.filter(
+        (l) => l.source.toLowerCase() === sourceItem.name.toLowerCase()
+      ).length;
+      return {
+        ...sourceItem,
+        count,
+        percentage:
+          leads.length > 0
+            ? Math.round((count / leads.length) * 1000) / 10
+            : 0,
+      };
+    });
+  }, [leads]);
+
   // Dynamically calculate pipeline stages from shared leads state
   const dynamicPipelineStages = React.useMemo(() => {
     return DEMO_PIPELINE_STAGES.map((stageItem) => ({
@@ -43,7 +60,7 @@ export default function DashboardPage() {
 
       {/* 3. Visual Charts Grid (Lead Sources Donut & Admission Pipeline Bars) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-        <LeadSourceChart sources={DEMO_LEAD_SOURCES} />
+        <LeadSourceChart sources={dynamicLeadSources} />
         <PipelineBarChart stages={dynamicPipelineStages} />
       </div>
 

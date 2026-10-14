@@ -81,6 +81,7 @@ export interface Lead {
   courseName?: string;
   source: string;
   sourceBadgeVariant?: "default" | "success" | "warning" | "error" | "info" | "neutral";
+  campaignId?: string;
   campaignName?: string;
   sourceCampaign?: string;
   stage: string;
@@ -170,4 +171,82 @@ export interface Course {
   standardFee: number;
   certificationBody: "AAPC" | "AHIMA" | "Internal Certificate";
   isActive: boolean;
+}
+
+// ==========================================
+// Lead Sources & Campaign Tracking Types
+// ==========================================
+
+export type LeadSourceCategory =
+  | "Aggregator"
+  | "Social Ads"
+  | "Search Ads"
+  | "Direct / Messaging"
+  | "Referral"
+  | "Offline"
+  | "Website"
+  | "Other";
+
+export interface ManagedLeadSource {
+  id: string; // e.g. "SRC-JUSTDIAL"
+  name: string; // e.g. "Justdial", "Instagram Ads"
+  category: LeadSourceCategory;
+  badgeVariant: "default" | "success" | "warning" | "error" | "info" | "neutral";
+  isActive: boolean;
+  description?: string;
+  createdAt: string;
+}
+
+export type CampaignStatus = "Planned" | "Active" | "Completed" | "Paused";
+
+export interface MarketingCampaign {
+  id: string; // e.g. "CAMP-101"
+  name: string; // e.g. "IG_Oct_CPC_Prep"
+  sourceId: string; // references ManagedLeadSource.id
+  sourceName: string; // denormalized for easy lookup
+  startDate: string; // YYYY-MM-DD or ISO
+  endDate?: string;
+  budget: number; // Planned budget in INR
+  status: CampaignStatus;
+  targetAudience?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface SourcePerformanceMetric {
+  sourceId: string;
+  sourceName: string;
+  category: LeadSourceCategory;
+  badgeVariant: "default" | "success" | "warning" | "error" | "info" | "neutral";
+  isActive: boolean;
+  totalLeads: number;
+  enrolledCount: number;
+  conversionRate: number; // e.g. 15.4%
+  activeCampaignsCount: number;
+}
+
+export interface CampaignPerformanceMetric {
+  campaignId: string;
+  campaignName: string;
+  sourceId: string;
+  sourceName: string;
+  startDate: string;
+  endDate?: string;
+  budget: number;
+  status: CampaignStatus;
+  totalLeads: number;
+  enrolledCount: number;
+  conversionRate: number; // e.g. 20.0%
+  costPerLead: number | null; // budget / totalLeads, null if 0 leads
+}
+
+export interface SourcesSummaryMetrics {
+  totalSources: number;
+  activeSources: number;
+  totalCampaigns: number;
+  activeCampaigns: number;
+  attributedLeads: number;
+  enrolledAdmissions: number;
+  totalBudget: number;
+  avgConversionRate: number;
 }
