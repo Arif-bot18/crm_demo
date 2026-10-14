@@ -10,6 +10,13 @@ import {
   formatIndianPhoneNumber,
 } from "@/lib/demo-data";
 
+export interface PipelineSummaryMetrics {
+  totalActive: number;
+  inCounselling: number;
+  feesDiscussed: number;
+  enrolled: number;
+}
+
 interface LeadsContextType {
   leads: Lead[];
   addLead: (
@@ -22,6 +29,10 @@ interface LeadsContextType {
     id: string,
     updatedFields: Partial<Lead>
   ) => { success: boolean; error?: string };
+  updateLeadStage: (
+    id: string,
+    newStage: string
+  ) => { success: boolean; error?: string };
   deleteLead: (id: string) => { success: boolean; error?: string };
   isPhoneDuplicate: (phone: string, excludeId?: string) => boolean;
   summary: {
@@ -30,6 +41,7 @@ interface LeadsContextType {
     interestedLeads: number;
     enrolledStudents: number;
   };
+  pipelineSummary: PipelineSummaryMetrics;
   resetToInitial: () => void;
 }
 
@@ -166,6 +178,13 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
     [isPhoneDuplicate]
   );
 
+  const updateLeadStage = React.useCallback(
+    (id: string, newStage: string) => {
+      return updateLead(id, { stage: newStage });
+    },
+    [updateLead]
+  );
+
   const deleteLead = React.useCallback((id: string) => {
     setLeads((prev) => prev.filter((lead) => lead.id !== id));
     return { success: true };
@@ -175,7 +194,7 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
     setLeads(INITIAL_DEMO_LEADS);
   }, []);
 
-  // Calculate dynamic metrics from loaded demonstration dataset
+  // Calculate dynamic metrics from loaded demonstration dataset for All Leads
   const summary = React.useMemo(() => {
     const totalLeads = leads.length;
     const newLeads = leads.filter((l) => l.stage === "New Lead").length;
@@ -195,15 +214,32 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
     };
   }, [leads]);
 
+  // Calculate pipeline-specific summary metrics
+  const pipelineSummary = React.useMemo<PipelineSummaryMetrics>(() => {
+    const totalActive = leads.filter((l) => l.stage !== "Lost").length;
+    const inCounselling = leads.filter((l) => l.stage === "Counselling").length;
+    const feesDiscussed = leads.filter((l) => l.stage === "Fees Discussed").length;
+    const enrolled = leads.filter((l) => l.stage === "Enrolled").length;
+
+    return {
+      totalActive,
+      inCounselling,
+      feesDiscussed,
+      enrolled,
+    };
+  }, [leads]);
+
   return (
     <LeadsContext.Provider
       value={{
         leads,
         addLead,
         updateLead,
+        updateLeadStage,
         deleteLead,
         isPhoneDuplicate,
         summary,
+        pipelineSummary,
         resetToInitial,
       }}
     >

@@ -1,0 +1,208 @@
+"use client";
+
+import * as React from "react";
+import Link from "next/link";
+import { Eye, Calendar, Mail, Phone, SearchX, ExternalLink } from "lucide-react";
+import { Lead } from "@/types/crm";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { PIPELINE_STAGES } from "@/lib/demo-data";
+
+interface PipelineTableViewProps {
+  leads: Lead[];
+  onStageChange: (leadId: string, newStage: string) => void;
+  onViewDetails: (lead: Lead) => void;
+  onResetSearch: () => void;
+}
+
+export function PipelineTableView({
+  leads,
+  onStageChange,
+  onViewDetails,
+  onResetSearch,
+}: PipelineTableViewProps) {
+  if (leads.length === 0) {
+    return (
+      <Card className="w-full">
+        <CardContent className="flex flex-col items-center justify-center py-12 text-center space-y-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+            <SearchX className="h-6 w-6" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-sm font-semibold text-text-primary">
+              No pipeline inquiries found
+            </h3>
+            <p className="text-xs text-text-secondary max-w-sm">
+              No leads match your current search query. Try clearing the search.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onResetSearch}
+            className="text-xs mt-2"
+          >
+            Clear Search Query
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="w-full overflow-hidden shadow-card">
+      <CardContent className="p-0">
+        <div className="w-full overflow-x-auto">
+          <table className="w-full min-w-[850px] text-left text-xs">
+            <thead className="bg-slate-50/80 text-[11px] font-semibold uppercase tracking-wider text-text-secondary border-b border-border-subtle">
+              <tr>
+                <th scope="col" className="px-4 py-3 font-semibold">
+                  Student Details
+                </th>
+                <th scope="col" className="px-4 py-3 font-semibold">
+                  Lead ID
+                </th>
+                <th scope="col" className="px-4 py-3 font-semibold">
+                  Course
+                </th>
+                <th scope="col" className="px-4 py-3 font-semibold">
+                  Source
+                </th>
+                <th scope="col" className="px-4 py-3 font-semibold">
+                  Current Pipeline Stage
+                </th>
+                <th scope="col" className="px-4 py-3 font-semibold">
+                  Assigned Counsellor
+                </th>
+                <th scope="col" className="px-4 py-3 font-semibold">
+                  Next Follow-up
+                </th>
+                <th scope="col" className="px-4 py-3 font-semibold text-right">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border-subtle bg-white">
+              {leads.map((lead) => (
+                <tr
+                  key={lead.id}
+                  className="hover:bg-slate-50/70 transition-colors group"
+                >
+                  {/* Student */}
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <div className="flex items-center gap-2.5">
+                      <div className="h-7 w-7 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-700 shrink-0">
+                        {lead.studentName
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")
+                          .substring(0, 2)
+                          .toUpperCase()}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-text-primary text-xs">
+                          {lead.studentName}
+                        </span>
+                        <div className="flex items-center gap-2 text-[11px] text-text-muted">
+                          <span className="flex items-center gap-0.5 font-mono">
+                            <Phone className="h-2.5 w-2.5 inline" />
+                            {lead.phone}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+
+                  {/* Lead ID */}
+                  <td className="px-4 py-3 font-mono text-[11px] font-medium text-text-muted whitespace-nowrap">
+                    {lead.id}
+                  </td>
+
+                  {/* Course */}
+                  <td className="px-4 py-3 text-text-secondary whitespace-nowrap">
+                    <span
+                      className="truncate max-w-[170px] inline-block font-medium"
+                      title={lead.course}
+                    >
+                      {lead.course}
+                    </span>
+                  </td>
+
+                  {/* Source */}
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <Badge variant={lead.sourceBadgeVariant || "neutral"}>
+                      {lead.source}
+                    </Badge>
+                  </td>
+
+                  {/* Current Stage with Inline Transition Select */}
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <Badge variant={lead.stageBadgeVariant || "neutral"} showDot>
+                        {lead.stage}
+                      </Badge>
+                      <select
+                        value={lead.stage}
+                        onChange={(e) => onStageChange(lead.id, e.target.value)}
+                        className="text-[11px] h-7 rounded border border-border-subtle bg-slate-50 px-2 py-0.5 text-text-secondary hover:text-text-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                        aria-label={`Change stage for ${lead.studentName}`}
+                      >
+                        {PIPELINE_STAGES.map((stg) => (
+                          <option key={stg} value={stg}>
+                            {stg}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </td>
+
+                  {/* Assigned Counsellor */}
+                  <td className="px-4 py-3 text-text-secondary whitespace-nowrap font-medium">
+                    {lead.counselor}
+                  </td>
+
+                  {/* Next Follow-up */}
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <span
+                      className={`inline-flex items-center gap-1.5 text-xs ${
+                        lead.isOverdue
+                          ? "font-semibold text-status-error"
+                          : "text-text-secondary"
+                      }`}
+                    >
+                      <Calendar className="h-3.5 w-3.5 text-text-muted shrink-0" />
+                      {lead.nextFollowUp}
+                    </span>
+                  </td>
+
+                  {/* Actions */}
+                  <td className="px-4 py-3 whitespace-nowrap text-right">
+                    <div className="inline-flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => onViewDetails(lead)}
+                        className="rounded p-1.5 text-text-secondary hover:bg-slate-100 hover:text-primary transition-colors"
+                        title="View Full Details"
+                        aria-label={`View details for ${lead.studentName}`}
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </button>
+                      <Link
+                        href="/leads"
+                        className="rounded p-1.5 text-text-muted hover:bg-slate-100 hover:text-text-primary transition-colors"
+                        title="Open in All Leads"
+                        aria-label="Open in All Leads"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </Link>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

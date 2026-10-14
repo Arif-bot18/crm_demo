@@ -22,6 +22,14 @@ export default function DashboardPage() {
 
   const currentSummary = DEMO_SUMMARY_DATA[selectedRange] || DEMO_SUMMARY_DATA["This month"];
 
+  // Dynamically calculate pipeline stages from shared leads state
+  const dynamicPipelineStages = React.useMemo(() => {
+    return DEMO_PIPELINE_STAGES.map((stageItem) => ({
+      ...stageItem,
+      count: leads.filter((l) => l.stage === stageItem.stage).length,
+    }));
+  }, [leads]);
+
   return (
     <PageContainer className="space-y-6">
       {/* 1. Header with Interactive Date Range Selector */}
@@ -36,7 +44,7 @@ export default function DashboardPage() {
       {/* 3. Visual Charts Grid (Lead Sources Donut & Admission Pipeline Bars) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
         <LeadSourceChart sources={DEMO_LEAD_SOURCES} />
-        <PipelineBarChart stages={DEMO_PIPELINE_STAGES} />
+        <PipelineBarChart stages={dynamicPipelineStages} />
       </div>
 
       {/* 4. Full-Width Recent Leads Table from Shared State */}
